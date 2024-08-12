@@ -49,23 +49,29 @@ tokenizer.fit_on_texts(train_data['tokens'].tolist())
 train_sequences = tokenizer.texts_to_sequences(train_data['tokens'].tolist())
 validation_sequences = tokenizer.texts_to_sequences(validation_data['tokens'].tolist())
 
-train_padded = tf.keras.preprocessing.sequence.pad_sequences(train_sequences, padding='post')
-validation_padded = tf.keras.preprocessing.sequence.pad_sequences(validation_sequences, padding='post')
+# Limit the maximum length of sequences to reduce memory usage
+max_len = 100
+train_padded = tf.keras.preprocessing.sequence.pad_sequences(train_sequences, padding='post', maxlen=max_len)
+validation_padded = tf.keras.preprocessing.sequence.pad_sequences(validation_sequences, padding='post', maxlen=max_len)
 
-# Define the neural network architecture
-input_layer = Input(shape=(None,))
-embedding_layer = Embedding(input_dim=len(tokenizer.word_index)+1, output_dim=128)(input_layer)
-lstm_layer = LSTM(128, return_sequences=True)(embedding_layer)
-output_layer = Dense(len(tokenizer.word_index)+1, activation='softmax')(lstm_layer)
+# Convert labels to numpy arrays
+train_labels = train_data['label'].values
+validation_labels = validation_data['label'].values
+
+# Define the neural network architecture with reduced dimensions
+input_layer = Input(shape=(max_len,))
+embedding_layer = Embedding(input_dim=len(tokenizer.word_index)+1, output_dim=64)(input_layer)
+lstm_layer = LSTM(64)(embedding_layer)
+output_layer = Dense(1, activation='sigmoid')(lstm_layer)  # Use sigmoid for binary classification
 
 # Configure the model
 model = Model(inputs=input_layer, outputs=output_layer)
 optimizer = Adam(learning_rate=0.001)
-model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])  # Use binary crossentropy for binary classification
 
-# Train the model
-model.fit(train_padded, train_padded, epochs=10, validation_data=(validation_padded, validation_padded))
+# Train the model with a smaller batch size
+model.fit(train_padded, train_labels, epochs=10, validation_data=(validation_padded, validation_labels), batch_size=32)
 
 # Validate the model
-loss, accuracy = model.evaluate(validation_padded, validation_padded)
+loss, accuracy = model.evaluate(validation_padded, validation_labels)
 print(f'Validation Loss: {loss}, Validation Accuracy: {accuracy}')
